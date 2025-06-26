@@ -48,11 +48,13 @@
         background-color: #ccc;
         cursor: not-allowed;
       }
-      #createCallBtn {
+      #createCallBtn,
+      #joinBtn {
         background-color: #007bff;
         color: white;
       }
-      #createCallBtn:hover:not(:disabled) {
+      #createCallBtn:hover:not(:disabled),
+      #joinBtn:hover:not(:disabled) {
         background-color: #0056b3;
       }
       #hangupBtn {
@@ -120,8 +122,9 @@
     </div>
 
     <div id="joining-section" class="box hidden">
-      <h2>視聴を開始しています...</h2>
-      <p>接続が完了するまでお待ちください。</p>
+      <h2>視聴側</h2>
+      <p>配信を視聴するには、下のボタンを押してください。</p>
+      <button id="joinBtn">視聴を開始</button>
     </div>
 
     <div class="box">
@@ -175,6 +178,7 @@
       const startSection = document.getElementById("start-section");
       const shareSection = document.getElementById("share-section");
       const joiningSection = document.getElementById("joining-section");
+      const joinBtn = document.getElementById("joinBtn");
       const shareUrl = document.getElementById("share-url");
 
       // --- メインロジック ---
@@ -183,10 +187,13 @@
         const callId = urlParams.get("id");
 
         if (callId) {
-          // URLにIDがあれば、視聴者として自動で参加
+          // URLにIDがあれば、視聴者として参加準備
           startSection.classList.add("hidden");
           joiningSection.classList.remove("hidden");
-          await joinCall(callId);
+
+          joinBtn.onclick = async () => {
+            await joinCall(callId);
+          };
         } else {
           // URLにIDがなければ、カメラ側としてデバイスをセットアップ
           await setupDevices();
@@ -292,6 +299,7 @@
 
       // --- 視聴側の処理 ---
       async function joinCall(callId) {
+        joinBtn.disabled = true;
         hangupBtn.disabled = false;
         const callDoc = firestore.collection("calls").doc(callId);
         const answerCandidates = callDoc.collection("answerCandidates");
@@ -307,7 +315,7 @@
             remoteVideo.srcObject = remoteStream;
           }
           remoteStream.addTrack(event.track);
-          remoteVideo.play();
+          remoteVideo.play().catch(e => console.error("Remote play failed", e));
         };
 
         const callData = (await callDoc.get()).data();
@@ -341,7 +349,6 @@
       // --- 通話終了処理 ---
       hangupBtn.onclick = () => {
         pc.close();
-        // ここでFirestoreのドキュメントを削除するのが丁寧ですが、簡単のためリロードで対応
         window.location.href = window.location.pathname;
       };
     </script>
