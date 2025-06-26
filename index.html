@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebRTC Camera Streaming with Firebase</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        line-height: 1.6;
+        padding: 20px;
+        max-width: 1000px;
+        margin: 0 auto;
+        color: #333;
+      }
+      video {
+        width: 100%;
+        border: 1px solid #ddd;
+        background: #eee;
+        border-radius: 8px;
+      }
+      .container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .box {
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #f9f9f9;
+      }
+      .hidden {
+        display: none;
+      }
+      button {
+        font-size: 1em;
+        padding: 10px 20px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        margin-right: 10px;
+        transition: background-color 0.2s;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      #createCallBtn {
+        background-color: #007bff;
+        color: white;
+      }
+      #createCallBtn:hover:not(:disabled) {
+        background-color: #0056b3;
+      }
+      #hangupBtn {
+        background-color: #dc3545;
+        color: white;
+      }
+      #hangupBtn:hover:not(:disabled) {
+        background-color: #c82333;
+      }
+      select {
+        font-size: 1em;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        margin-right: 10px;
+        width: 100%;
+      }
+      #share-url {
+        font-weight: bold;
+        color: #007bff;
+        user-select: all;
+        word-break: break-all;
+        background: #e9ecef;
+        padding: 10px;
+        border-radius: 5px;
+      }
+      h1,
+      h2 {
+        border-bottom: 2px solid #eee;
+        padding-bottom: 10px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>WebRTC Camera Streaming</h1>
+
+    <div class="container">
+      <div>
+        <h2>自分の映像</h2>
+        <video id="localVideo" autoplay muted playsinline></video>
+      </div>
+      <div>
+        <h2>相手の映像</h2>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+    </div>
+
+    <div id="start-section" class="box">
+      <h2>カメラ側 (配信を開始する)</h2>
+      <label for="videoSource">映像ソース:</label>
+      <select id="videoSource"></select>
+      <br /><br />
+      <button id="createCallBtn">配信を開始</button>
+    </div>
+
+    <div id="share-section" class="box hidden">
+      <h2>配信を開始しました</h2>
+      <p>このURLを視聴者に共有してください:</p>
+      <p id="share-url"></p>
+    </div>
+
+    <div id="joining-section" class="box hidden">
+      <h2>視聴を開始しています...</h2>
+      <p>接続が完了するまでお待ちください。</p>
+    </div>
+
+    <div class="box">
+      <button id="hangupBtn" disabled>通話を終了</button>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+    <script>
+      // ▼▼▼▼▼ ここに、あなたのFirebaseプロジェクトの設定を貼り付け ▼▼▼▼▼
+      const firebaseConfig = {
+        apiKey: "AIzaSyBvEPsM2I9ye4fHHhrKITYfXZn_Zgu8WtY",
+        authDomain: "simple-webrtc-streamer.firebaseapp.com",
+        projectId: "simple-webrtc-streamer",
+        storageBucket: "simple-webrtc-streamer.firebasestorage.app",
+        messagingSenderId: "447059580644",
+        appId: "1:447059580644:web:a8e08aafb5e13b1a99bef1",
+      };
+      // ▲▲▲▲▲ ここまで ▲▲▲▲▲
+
+      // --- アプリケーションの初期化 ---
+      if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+        alert("Firebaseのプロジェクト設定をコード内に貼り付けてください！");
+      }
+      firebase.initializeApp(firebaseConfig);
+      const firestore = firebase.firestore();
+
+      const servers = {
+        iceServers: [
+          {
+            urls: [
+              "stun:stun1.l.google.com:19302",
+              "stun:stun2.l.google.com:19302",
+            ],
+          },
+        ],
+        iceCandidatePoolSize: 10,
+      };
+
+      let pc = new RTCPeerConnection(servers);
+      let localStream = null;
+      let remoteStream = null;
+
+      const videoSourceSelect = document.getElementById("videoSource");
+      const createCallBtn = document.getElementById("createCallBtn");
+      const hangupBtn = document.getElementById("hangupBtn");
+      const localVideo = document.getElementById("localVideo");
+      const remoteVideo = document.getElementById("remoteVideo");
+      const startSection = document.getElementById("start-section");
+      const shareSection = document.getElementById("share-section");
+      const joiningSection = document.getElementById("joining-section");
+      const shareUrl = document.getElementById("share-url");
+
+      // --- メインロジック ---
+      window.onload = async () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const callId = urlParams.get("id");
+
+        if (callId) {
+          // URLにIDがあれば、視聴者として自動で参加
+          startSection.classList.add("hidden");
+          joiningSection.classList.remove("hidden");
+          await joinCall(callId);
+        } else {
+          // URLにIDがなければ、カメラ側としてデバイスをセットアップ
+          await setupDevices();
+        }
+      };
+
+      // --- デバイス関連 ---
+      async function setupDevices() {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(
+            (device) => device.kind === "videoinput"
+          );
+          if (videoDevices.length === 0) {
+            alert("利用可能なカメラが見つかりません。");
+            return;
+          }
+          videoDevices.forEach((device) => {
+            const option = document.createElement("option");
+            option.value = device.deviceId;
+            option.innerText =
+              device.label || `カメラ ${videoSourceSelect.length + 1}`;
+            videoSourceSelect.appendChild(option);
+          });
+          await switchCamera();
+          videoSourceSelect.addEventListener("change", switchCamera);
+        } catch (e) {
+          console.error(e);
+          alert(
+            "カメラへのアクセス中にエラーが発生しました。ブラウザの権限を確認してください。"
+          );
+        }
+      }
+
+      async function switchCamera() {
+        if (localStream) {
+          localStream.getTracks().forEach((track) => track.stop());
+        }
+        const deviceId = videoSourceSelect.value;
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: deviceId } },
+            audio: true,
+          });
+          localVideo.srcObject = localStream;
+          localVideo.play();
+        } catch (e) {
+          console.error(e);
+          alert("選択されたカメラの起動に失敗しました。");
+        }
+      }
+
+      // --- カメラ側（配信者）の処理 ---
+      createCallBtn.onclick = async () => {
+        if (!localStream) {
+          alert("カメラが選択されていません。");
+          return;
+        }
+        createCallBtn.disabled = true;
+        hangupBtn.disabled = false;
+
+        const callDoc = firestore.collection("calls").doc();
+        const offerCandidates = callDoc.collection("offerCandidates");
+        const answerCandidates = callDoc.collection("answerCandidates");
+
+        const url = `${window.location.origin}${window.location.pathname}?id=${callDoc.id}`;
+        shareUrl.textContent = url;
+        startSection.classList.add("hidden");
+        shareSection.classList.remove("hidden");
+
+        pc.onicecandidate = (event) => {
+          event.candidate && offerCandidates.add(event.candidate.toJSON());
+        };
+
+        localStream
+          .getTracks()
+          .forEach((track) => pc.addTrack(track, localStream));
+
+        const offerDescription = await pc.createOffer();
+        await pc.setLocalDescription(offerDescription);
+        const offer = {
+          sdp: offerDescription.sdp,
+          type: offerDescription.type,
+        };
+        await callDoc.set({ offer });
+
+        callDoc.onSnapshot((snapshot) => {
+          const data = snapshot.data();
+          if (!pc.currentRemoteDescription && data?.answer) {
+            const answerDescription = new RTCSessionDescription(data.answer);
+            pc.setRemoteDescription(answerDescription);
+          }
+        });
+
+        answerCandidates.onSnapshot((snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+              pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+            }
+          });
+        });
+      };
+
+      // --- 視聴側の処理 ---
+      async function joinCall(callId) {
+        hangupBtn.disabled = false;
+        const callDoc = firestore.collection("calls").doc(callId);
+        const answerCandidates = callDoc.collection("answerCandidates");
+        const offerCandidates = callDoc.collection("offerCandidates");
+
+        pc.onicecandidate = (event) => {
+          event.candidate && answerCandidates.add(event.candidate.toJSON());
+        };
+
+        pc.ontrack = (event) => {
+          if (!remoteStream) {
+            remoteStream = new MediaStream();
+            remoteVideo.srcObject = remoteStream;
+          }
+          remoteStream.addTrack(event.track);
+          remoteVideo.play();
+        };
+
+        const callData = (await callDoc.get()).data();
+        if (!callData || !callData.offer) {
+          alert("指定された配信IDが見つかりません。");
+          joiningSection.innerHTML =
+            "<h2>エラー</h2><p>指定された配信IDは無効です。</p>";
+          return;
+        }
+
+        await pc.setRemoteDescription(
+          new RTCSessionDescription(callData.offer)
+        );
+        const answerDescription = await pc.createAnswer();
+        await pc.setLocalDescription(answerDescription);
+        const answer = {
+          type: answerDescription.type,
+          sdp: answerDescription.sdp,
+        };
+        await callDoc.update({ answer });
+
+        offerCandidates.onSnapshot((snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+              pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+            }
+          });
+        });
+      }
+
+      // --- 通話終了処理 ---
+      hangupBtn.onclick = () => {
+        pc.close();
+        // ここでFirestoreのドキュメントを削除するのが丁寧ですが、簡単のためリロードで対応
+        window.location.href = window.location.pathname;
+      };
+    </script>
+  </body>
+</html>
