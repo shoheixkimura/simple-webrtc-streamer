@@ -183,6 +183,9 @@
 
       // --- メインロジック ---
       window.onload = async () => {
+        // 視聴者・配信者に関わらず、まず自分のカメラをセットアップする
+        await setupDevices();
+
         const urlParams = new URLSearchParams(window.location.search);
         const callId = urlParams.get("id");
 
@@ -194,10 +197,8 @@
           joinBtn.onclick = async () => {
             await joinCall(callId);
           };
-        } else {
-          // URLにIDがなければ、カメラ側としてデバイスをセットアップ
-          await setupDevices();
         }
+        // URLにIDがなければ、カメラ側のUIがそのまま表示される
       };
 
       // --- デバイス関連 ---
