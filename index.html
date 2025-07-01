@@ -229,11 +229,6 @@
         const offerCandidates = callDoc.collection("offerCandidates");
         const answerCandidates = callDoc.collection("answerCandidates");
 
-        const url = `${window.location.origin}${window.location.pathname}?id=${callDoc.id}`;
-        shareUrl.textContent = url;
-        startSection.classList.add("hidden");
-        shareSection.classList.remove("hidden");
-
         pc.onicecandidate = (event) => {
           event.candidate && offerCandidates.add(event.candidate.toJSON());
         };
@@ -242,7 +237,15 @@
 
         const offerDescription = await pc.createOffer();
         await pc.setLocalDescription(offerDescription);
+        
+        // ★★★ 修正点：先に書き込みを行う ★★★
         await callDoc.set({ offer: offerDescription.toJSON() });
+
+        // ★★★ 修正点：書き込み完了後にURLを表示する ★★★
+        const url = `${window.location.origin}${window.location.pathname}?id=${callDoc.id}`;
+        shareUrl.textContent = url;
+        startSection.classList.add("hidden");
+        shareSection.classList.remove("hidden");
 
         callDoc.onSnapshot((snapshot) => {
           const data = snapshot.data();
