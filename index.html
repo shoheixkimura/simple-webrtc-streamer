@@ -223,7 +223,6 @@
       createCallBtn.onclick = async () => {
         if (!localStream) return alert("カメラが選択されていません。");
         createCallBtn.disabled = true;
-        hangupBtn.disabled = false;
 
         const callDoc = firestore.collection("calls").doc();
         const offerCandidates = callDoc.collection("offerCandidates");
@@ -235,32 +234,40 @@
 
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
-        const offerDescription = await pc.createOffer();
-        await pc.setLocalDescription(offerDescription);
-        
-        // ★★★ 修正点：先に書き込みを行う ★★★
-        await callDoc.set({ offer: offerDescription.toJSON() });
+        try {
+          const offerDescription = await pc.createOffer();
+          await pc.setLocalDescription(offerDescription);
 
-        // ★★★ 修正点：書き込み完了後にURLを表示する ★★★
-        const url = `${window.location.origin}${window.location.pathname}?id=${callDoc.id}`;
-        shareUrl.textContent = url;
-        startSection.classList.add("hidden");
-        shareSection.classList.remove("hidden");
+          // 先に書き込みを行い、完了を待つ
+          await callDoc.set({ offer: offerDescription.toJSON() });
 
-        callDoc.onSnapshot((snapshot) => {
-          const data = snapshot.data();
-          if (!pc.currentRemoteDescription && data?.answer) {
-            pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-          }
-        });
+          // 書き込みが成功してから、UIを更新しURLを表示
+          const url = `${window.location.origin}${window.location.pathname}?id=${callDoc.id}`;
+          shareUrl.textContent = url;
+          startSection.classList.add("hidden");
+          shareSection.classList.remove("hidden");
+          hangupBtn.disabled = false;
 
-        answerCandidates.onSnapshot((snapshot) => {
-          snapshot.docChanges().forEach((change) => {
-            if (change.type === "added") {
-              pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+          callDoc.onSnapshot((snapshot) => {
+            const data = snapshot.data();
+            if (!pc.currentRemoteDescription && data?.answer) {
+              pc.setRemoteDescription(new RTCSessionDescription(data.answer));
             }
           });
-        });
+
+          answerCandidates.onSnapshot((snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === "added") {
+                pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+              }
+            });
+          });
+
+        } catch (e) {
+          console.error(e);
+          alert("エラー: 配信セッションの作成に失敗しました。コンソールを確認してください。");
+          createCallBtn.disabled = false; // ボタンを再度有効にする
+        }
       };
 
       async function joinCall(callId) {
