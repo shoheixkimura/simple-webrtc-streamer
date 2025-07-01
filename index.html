@@ -3,34 +3,55 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WebRTC Camera Streaming with Firebase</title>
+    <title>WebRTC Fullscreen Streamer</title>
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           Helvetica, Arial, sans-serif;
         line-height: 1.6;
         padding: 20px;
-        max-width: 1000px;
         margin: 0 auto;
         color: #333;
+        background-color: #f0f2f5;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
       }
-      video {
+      .video-viewport {
         width: 100%;
-        border: 1px solid #ddd;
-        background: #eee;
-        border-radius: 8px;
-      }
-      .container {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
+        max-width: 450px; /* スマートフォンのような幅に制限 */
+        aspect-ratio: 1080 / 1920; /* 縦長の比率を維持 */
+        border: 3px solid #111;
+        border-radius: 20px;
+        background: #000;
+        position: relative;
+        overflow: hidden; /* はみ出した映像を隠す */
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         margin-bottom: 20px;
+      }
+      #remoteVideo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* コンテナを覆うように映像を表示（重要） */
+      }
+      #localVideo {
+        position: absolute;
+        bottom: 15px;
+        right: 15px;
+        width: 25%; /* 小さなサイズに */
+        border: 2px solid rgba(255,255,255,0.5);
+        border-radius: 10px;
+        object-fit: cover;
       }
       .box {
         padding: 20px;
         border: 1px solid #ddd;
         border-radius: 8px;
         background: #f9f9f9;
+        width: 100%;
+        max-width: 450px;
+        box-sizing: border-box;
+        margin-bottom: 10px;
       }
       .hidden {
         display: none;
@@ -43,6 +64,9 @@
         cursor: pointer;
         margin-right: 10px;
         transition: background-color 0.2s;
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 10px;
       }
       button:disabled {
         background-color: #ccc;
@@ -53,24 +77,17 @@
         background-color: #007bff;
         color: white;
       }
-      #createCallBtn:hover:not(:disabled),
-      #joinBtn:hover:not(:disabled) {
-        background-color: #0056b3;
-      }
       #hangupBtn {
         background-color: #dc3545;
         color: white;
-      }
-      #hangupBtn:hover:not(:disabled) {
-        background-color: #c82333;
       }
       select {
         font-size: 1em;
         padding: 10px;
         border-radius: 8px;
         border: 1px solid #ccc;
-        margin-right: 10px;
         width: 100%;
+        box-sizing: border-box;
       }
       #share-url {
         font-weight: bold;
@@ -80,38 +97,24 @@
         background: #e9ecef;
         padding: 10px;
         border-radius: 5px;
+        text-align: center;
       }
-      h1,
-      h2 {
-        border-bottom: 2px solid #eee;
-        padding-bottom: 10px;
-      }
-      label {
-        display: block;
-        margin-bottom: 5px;
-        font-weight: bold;
-      }
+      h1, h2 { text-align: center; }
+      label { font-weight: bold; }
     </style>
   </head>
   <body>
-    <h1>WebRTC Camera Streaming</h1>
+    <h1>WebRTC Fullscreen Streamer</h1>
 
-    <div class="container">
-      <div>
-        <h2>自分の映像</h2>
-        <video id="localVideo" autoplay muted playsinline></video>
-      </div>
-      <div>
-        <h2>相手の映像</h2>
-        <video id="remoteVideo" autoplay playsinline></video>
-      </div>
+    <div class="video-viewport">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <video id="localVideo" autoplay muted playsinline></video>
     </div>
 
     <div id="start-section" class="box">
-      <h2>カメラ側 (配信を開始する)</h2>
+      <h2>配信側</h2>
       <label for="videoSource">映像ソース:</label>
       <select id="videoSource"></select>
-      <br /><br />
       <button id="createCallBtn">配信を開始</button>
     </div>
 
@@ -136,7 +139,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
     <script>
-      // ▼▼▼▼▼ ここに、あなたのFirebaseプロジェクトの設定を貼り付け ▼▼▼▼▼
       const firebaseConfig = {
         apiKey: "AIzaSyBvEPsM2I9ye4fHHhrKITYfXZn_Zgu8WtY",
         authDomain: "simple-webrtc-streamer.firebaseapp.com",
@@ -145,23 +147,13 @@
         messagingSenderId: "447059580644",
         appId: "1:447059580644:web:a8e08aafb5e13b1a99bef1",
       };
-      // ▲▲▲▲▲ ここまで ▲▲▲▲▲
 
-      // --- アプリケーションの初期化 ---
-      if (firebaseConfig.apiKey === "YOUR_API_KEY") {
-        alert("Firebaseのプロジェクト設定をコード内に貼り付けてください！");
-      }
       firebase.initializeApp(firebaseConfig);
       const firestore = firebase.firestore();
 
       const servers = {
         iceServers: [
-          {
-            urls: [
-              "stun:stun1.l.google.com:19302",
-              "stun:stun2.l.google.com:19302",
-            ],
-          },
+          { urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"] },
         ],
         iceCandidatePoolSize: 10,
       };
@@ -181,58 +173,40 @@
       const joinBtn = document.getElementById("joinBtn");
       const shareUrl = document.getElementById("share-url");
 
-      // --- メインロジック ---
       window.onload = async () => {
-        // 視聴者・配信者に関わらず、まず自分のカメラをセットアップする
         await setupDevices();
-
         const urlParams = new URLSearchParams(window.location.search);
         const callId = urlParams.get("id");
 
         if (callId) {
-          // URLにIDがあれば、視聴者として参加準備
           startSection.classList.add("hidden");
           joiningSection.classList.remove("hidden");
-
-          joinBtn.onclick = async () => {
-            await joinCall(callId);
-          };
-        }
-        // URLにIDがなければ、カメラ側のUIがそのまま表示される
+          joinBtn.onclick = () => joinCall(callId);
+        } 
       };
 
-      // --- デバイス関連 ---
       async function setupDevices() {
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoDevices = devices.filter(
-            (device) => device.kind === "videoinput"
-          );
-          if (videoDevices.length === 0) {
-            alert("利用可能なカメラが見つかりません。");
-            return;
-          }
+          const videoDevices = devices.filter((d) => d.kind === "videoinput");
+          if (videoDevices.length === 0) return alert("カメラが見つかりません。");
+
           videoDevices.forEach((device) => {
             const option = document.createElement("option");
             option.value = device.deviceId;
-            option.innerText =
-              device.label || `カメラ ${videoSourceSelect.length + 1}`;
+            option.innerText = device.label || `カメラ ${videoSourceSelect.length + 1}`;
             videoSourceSelect.appendChild(option);
           });
           await switchCamera();
           videoSourceSelect.addEventListener("change", switchCamera);
         } catch (e) {
           console.error(e);
-          alert(
-            "カメラへのアクセス中にエラーが発生しました。ブラウザの権限を確認してください。"
-          );
+          alert("カメラへのアクセスでエラーが発生しました。");
         }
       }
 
       async function switchCamera() {
-        if (localStream) {
-          localStream.getTracks().forEach((track) => track.stop());
-        }
+        if (localStream) localStream.getTracks().forEach((t) => t.stop());
         const deviceId = videoSourceSelect.value;
         try {
           localStream = await navigator.mediaDevices.getUserMedia({
@@ -240,19 +214,14 @@
             audio: true,
           });
           localVideo.srcObject = localStream;
-          localVideo.play();
         } catch (e) {
           console.error(e);
-          alert("選択されたカメラの起動に失敗しました。");
+          alert("カメラの起動に失敗しました。");
         }
       }
 
-      // --- カメラ側（配信者）の処理 ---
       createCallBtn.onclick = async () => {
-        if (!localStream) {
-          alert("カメラが選択されていません。");
-          return;
-        }
+        if (!localStream) return alert("カメラが選択されていません。");
         createCallBtn.disabled = true;
         hangupBtn.disabled = false;
 
@@ -269,23 +238,16 @@
           event.candidate && offerCandidates.add(event.candidate.toJSON());
         };
 
-        localStream
-          .getTracks()
-          .forEach((track) => pc.addTrack(track, localStream));
+        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
         const offerDescription = await pc.createOffer();
         await pc.setLocalDescription(offerDescription);
-        const offer = {
-          sdp: offerDescription.sdp,
-          type: offerDescription.type,
-        };
-        await callDoc.set({ offer });
+        await callDoc.set({ offer: offerDescription.toJSON() });
 
         callDoc.onSnapshot((snapshot) => {
           const data = snapshot.data();
           if (!pc.currentRemoteDescription && data?.answer) {
-            const answerDescription = new RTCSessionDescription(data.answer);
-            pc.setRemoteDescription(answerDescription);
+            pc.setRemoteDescription(new RTCSessionDescription(data.answer));
           }
         });
 
@@ -298,7 +260,6 @@
         });
       };
 
-      // --- 視聴側の処理 ---
       async function joinCall(callId) {
         joinBtn.disabled = true;
         hangupBtn.disabled = false;
@@ -316,27 +277,18 @@
             remoteVideo.srcObject = remoteStream;
           }
           remoteStream.addTrack(event.track);
-          remoteVideo.play().catch(e => console.error("Remote play failed", e));
         };
 
         const callData = (await callDoc.get()).data();
         if (!callData || !callData.offer) {
           alert("指定された配信IDが見つかりません。");
-          joiningSection.innerHTML =
-            "<h2>エラー</h2><p>指定された配信IDは無効です。</p>";
-          return;
+          return (joiningSection.innerHTML = "<h2>エラー</h2>");
         }
 
-        await pc.setRemoteDescription(
-          new RTCSessionDescription(callData.offer)
-        );
+        await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
         const answerDescription = await pc.createAnswer();
         await pc.setLocalDescription(answerDescription);
-        const answer = {
-          type: answerDescription.type,
-          sdp: answerDescription.sdp,
-        };
-        await callDoc.update({ answer });
+        await callDoc.update({ answer: answerDescription.toJSON() });
 
         offerCandidates.onSnapshot((snapshot) => {
           snapshot.docChanges().forEach((change) => {
@@ -347,7 +299,6 @@
         });
       }
 
-      // --- 通話終了処理 ---
       hangupBtn.onclick = () => {
         pc.close();
         window.location.href = window.location.pathname;
@@ -355,3 +306,4 @@
     </script>
   </body>
 </html>
+
