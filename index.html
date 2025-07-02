@@ -238,10 +238,9 @@
           const offerDescription = await pc.createOffer();
           await pc.setLocalDescription(offerDescription);
 
-          // 先に書き込みを行い、完了を待つ
-          await callDoc.set({ offer: offerDescription.toJSON() });
+          const offer = { type: offerDescription.type, sdp: offerDescription.sdp };
+          await callDoc.set({ offer });
 
-          // 書き込みが成功してから、UIを更新しURLを表示
           const url = `${window.location.origin}${window.location.pathname}?id=${callDoc.id}`;
           shareUrl.textContent = url;
           startSection.classList.add("hidden");
@@ -266,7 +265,7 @@
         } catch (e) {
           console.error(e);
           alert("エラー: 配信セッションの作成に失敗しました。コンソールを確認してください。");
-          createCallBtn.disabled = false; // ボタンを再度有効にする
+          createCallBtn.disabled = false;
         }
       };
 
@@ -298,7 +297,9 @@
         await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
         const answerDescription = await pc.createAnswer();
         await pc.setLocalDescription(answerDescription);
-        await callDoc.update({ answer: answerDescription.toJSON() });
+
+        const answer = { type: answerDescription.type, sdp: answerDescription.sdp };
+        await callDoc.update({ answer });
 
         offerCandidates.onSnapshot((snapshot) => {
           snapshot.docChanges().forEach((change) => {
