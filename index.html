@@ -27,7 +27,7 @@
         position: relative;
         overflow: hidden; 
         box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        margin-bottom: 20px;
+        margin-bottom: 10px; /* 少し狭くする */
       }
       #remoteVideo {
         width: 100%;
@@ -57,6 +57,18 @@
         justify-content: center;
         align-items: center;
         cursor: pointer;
+        z-index: 10;
+      }
+      .stats-box {
+        font-family: monospace;
+        font-size: 12px;
+        color: #eee;
+        background-color: rgba(0,0,0,0.5);
+        padding: 5px 10px;
+        border-radius: 5px;
+        position: absolute;
+        bottom: 15px;
+        left: 15px;
         z-index: 10;
       }
       .box {
@@ -128,6 +140,7 @@
       <button id="fullscreenBtn" class="hidden">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
       </button>
+      <div id="statsBox" class="stats-box hidden">Resolution: -</div>
     </div>
 
     <div id="start-section" class="box">
@@ -180,6 +193,7 @@
       let pc = new RTCPeerConnection(servers);
       let localStream = null;
       let remoteStream = null;
+      let statsInterval = null;
 
       const videoSourceSelect = document.getElementById("videoSource");
       const createCallBtn = document.getElementById("createCallBtn");
@@ -193,6 +207,7 @@
       const shareUrl = document.getElementById("share-url");
       const fullscreenBtn = document.getElementById("fullscreenBtn");
       const videoViewport = document.querySelector(".video-viewport");
+      const statsBox = document.getElementById("statsBox");
 
       window.onload = async () => {
         await setupDevices();
@@ -240,14 +255,19 @@
         if (localStream) localStream.getTracks().forEach((t) => t.stop());
         const deviceId = videoSourceSelect.value;
         try {
-          localStream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: deviceId } },
+          const constraints = {
             audio: true,
-          });
+            video: {
+              deviceId: { exact: deviceId },
+              width: { ideal: 3840 },
+              height: { ideal: 2160 },
+            },
+          };
+          localStream = await navigator.mediaDevices.getUserMedia(constraints);
           localVideo.srcObject = localStream;
         } catch (e) {
           console.error(e);
-          alert("カメラの起動に失敗しました。");
+          alert("カメラの起動に失敗しました。指定した解像度がサポートされていない可能性があります。");
         }
       }
 
@@ -318,6 +338,18 @@
           }
           remoteStream.addTrack(event.track);
           fullscreenBtn.classList.remove("hidden");
+          statsBox.classList.remove("hidden");
+
+          if (statsInterval) clearInterval(statsInterval);
+          statsInterval = setInterval(async () => {
+            if (!pc) return;
+            const stats = await pc.getStats();
+            stats.forEach(report => {
+              if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                statsBox.textContent = `Resolution: ${report.frameWidth}x${report.frameHeight}`;
+              }
+            });
+          }, 1000);
         };
 
         const callData = (await callDoc.get()).data();
@@ -343,6 +375,7 @@
       }
 
       hangupBtn.onclick = () => {
+        if (statsInterval) clearInterval(statsInterval);
         pc.close();
         window.location.href = window.location.pathname;
       };
