@@ -19,29 +19,45 @@
       }
       .video-viewport {
         width: 100%;
-        max-width: 450px; /* スマートフォンのような幅に制限 */
-        aspect-ratio: 1080 / 1920; /* 縦長の比率を維持 */
+        max-width: 450px; 
+        aspect-ratio: 1080 / 1920; 
         border: 3px solid #111;
         border-radius: 20px;
         background: #000;
         position: relative;
-        overflow: hidden; /* はみ出した映像を隠す */
+        overflow: hidden; 
         box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         margin-bottom: 20px;
       }
       #remoteVideo {
         width: 100%;
         height: 100%;
-        object-fit: cover; /* コンテナを覆うように映像を表示（重要） */
+        object-fit: cover; 
       }
       #localVideo {
         position: absolute;
         bottom: 15px;
         right: 15px;
-        width: 25%; /* 小さなサイズに */
+        width: 25%; 
         border: 2px solid rgba(255,255,255,0.5);
         border-radius: 10px;
         object-fit: cover;
+      }
+      #fullscreenBtn {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(0,0,0,0.4);
+        border: none;
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        z-index: 10;
       }
       .box {
         padding: 20px;
@@ -109,6 +125,9 @@
     <div class="video-viewport">
       <video id="remoteVideo" autoplay playsinline></video>
       <video id="localVideo" autoplay muted playsinline></video>
+      <button id="fullscreenBtn" class="hidden">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+      </button>
     </div>
 
     <div id="start-section" class="box">
@@ -172,6 +191,8 @@
       const joiningSection = document.getElementById("joining-section");
       const joinBtn = document.getElementById("joinBtn");
       const shareUrl = document.getElementById("share-url");
+      const fullscreenBtn = document.getElementById("fullscreenBtn");
+      const videoViewport = document.querySelector(".video-viewport");
 
       window.onload = async () => {
         await setupDevices();
@@ -183,6 +204,16 @@
           joiningSection.classList.remove("hidden");
           joinBtn.onclick = () => joinCall(callId);
         } 
+      };
+
+      fullscreenBtn.onclick = () => {
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          videoViewport.requestFullscreen().catch(err => {
+            alert(`フルスクリーンモードへの切り替えに失敗しました: ${err.message}`);
+          });
+        }
       };
 
       async function setupDevices() {
@@ -286,6 +317,7 @@
             remoteVideo.srcObject = remoteStream;
           }
           remoteStream.addTrack(event.track);
+          fullscreenBtn.classList.remove("hidden");
         };
 
         const callData = (await callDoc.get()).data();
