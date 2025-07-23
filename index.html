@@ -66,11 +66,11 @@
         position: absolute;
         top: 15px;
         right: 15px;
-        background: rgba(0,0,0,0.7);
+        background: rgba(0,0,0,0.85);
         border: none;
         color: white;
-        width: 50px;
-        height: 50px;
+        width: 60px;
+        height: 60px;
         border-radius: 50%;
         display: flex;
         justify-content: center;
@@ -158,9 +158,12 @@
       <video id="remoteVideo" autoplay playsinline></video>
       <video id="localVideo" autoplay muted playsinline></video>
       <button id="fullscreenBtn" class="hidden">
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
+          <path d="M5 5h5V3H3v7h2zm0 9H3v7h7v-2H5zm14 0h-2v5h-5v2h7zm-2-9h2V3h-7v2h5z"/>
+        </svg>
       </button>
       <div id="statsBox" class="stats-box hidden">Resolution: -</div>
+      <div id="localStatsBox" class="stats-box hidden" style="bottom: 50px;">Local Resolution: -</div>
     </div>
 
     <div id="start-section" class="box">
@@ -232,6 +235,7 @@
       const fullscreenBtn = document.getElementById("fullscreenBtn");
       const videoViewport = document.querySelector(".video-viewport");
       const statsBox = document.getElementById("statsBox");
+      const localStatsBox = document.getElementById("localStatsBox");
 
       window.onload = async () => {
         await setupDevices();
@@ -289,6 +293,14 @@
           };
           localStream = await navigator.mediaDevices.getUserMedia(constraints);
           localVideo.srcObject = localStream;
+
+          localStatsBox.classList.remove("hidden");
+          const videoTrack = localStream.getVideoTracks()[0];
+          if (videoTrack) {
+            const settings = videoTrack.getSettings();
+            localStatsBox.textContent = `Local Resolution: ${settings.width}x${settings.height}`;
+          }
+
         } catch (e) {
           console.error(e);
           alert("カメラの起動に失敗しました。指定した解像度がサポートされていない可能性があります。");
