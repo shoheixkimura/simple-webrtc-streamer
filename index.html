@@ -35,9 +35,7 @@
         object-fit: cover;
         transition: transform 0.2s ease-in-out;
       }
-      #remoteVideo.rotated {
-        transform: rotate(90deg) scale(1.78);
-      }
+      
       #localVideo {
         position: absolute;
         bottom: 15px;
@@ -151,10 +149,6 @@
       <h2>配信側</h2>
       <label for="videoSource">映像ソース:</label>
       <select id="videoSource"></select>
-      <div style="margin-bottom: 10px; display: flex; align-items: center;">
-        <input type="checkbox" id="rotateCheckbox" style="margin-right: 8px;">
-        <label for="rotateCheckbox">映像を90度回転して配信</label>
-      </div>
       <button id="createCallBtn">配信を開始</button>
     </div>
 
@@ -267,8 +261,8 @@
             audio: true,
             video: {
               deviceId: { exact: deviceId },
-              width: { ideal: 3840 },
-              height: { ideal: 2160 },
+              width: { ideal: 1080 },
+              height: { ideal: 1920 },
             },
           };
           localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -300,11 +294,7 @@
           const offer = { type: offerDescription.type, sdp: offerDescription.sdp };
           await callDoc.set({ offer });
 
-          const rotateCheckbox = document.getElementById('rotateCheckbox');
-          let url = `${window.location.origin}${window.location.pathname}?id=${callDoc.id}`;
-          if (rotateCheckbox.checked) {
-            url += '&rotate=true';
-          }
+          const url = `${window.location.origin}${window.location.pathname}?id=${callDoc.id}`;
           shareUrl.textContent = url;
           startSection.classList.add("hidden");
           shareSection.classList.remove("hidden");
@@ -333,11 +323,6 @@
       };
 
       async function joinCall(callId) {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('rotate') === 'true') {
-          remoteVideo.classList.add('rotated');
-        }
-
         joinBtn.disabled = true;
         hangupBtn.disabled = false;
         const callDoc = firestore.collection("calls").doc(callId);
