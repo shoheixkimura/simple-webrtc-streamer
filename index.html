@@ -328,6 +328,21 @@
 
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
+        // Get the video sender
+        const videoSender = pc.getSenders().find(sender => sender.track && sender.track.kind === 'video');
+        if (videoSender) {
+            const parameters = videoSender.getParameters();
+            if (!parameters.encodings) {
+                parameters.encodings = [{}];
+            }
+            // Try to enforce higher resolution and quality
+            parameters.encodings[0].maxBitrate = 5000000; // 5 Mbps
+            parameters.encodings[0].scaleResolutionDownBy = 1; // No downscaling
+            videoSender.setParameters(parameters)
+                .then(() => console.log('Video sender parameters set successfully'))
+                .catch(e => console.error('Failed to set video sender parameters:', e));
+        }
+
         try {
           const offerDescription = await pc.createOffer();
           await pc.setLocalDescription(offerDescription);
