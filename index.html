@@ -49,26 +49,35 @@
         position: absolute;
         bottom: 15px;
         right: 15px;
-        width: 25%; 
+        width: 25%;
         border: 2px solid rgba(255,255,255,0.5);
         border-radius: 10px;
+        object-fit: cover;
+      }
+      /* localVideo 用の rotated スタイル */
+      #localVideo.rotated {
+        transform: rotate(90deg);
+        width: calc(25% * (1920 / 1080));
+        height: calc(25% * (1080 / 1920));
+        transform-origin: center center;
         object-fit: cover;
       }
       #fullscreenBtn {
         position: absolute;
         top: 15px;
         right: 15px;
-        background: rgba(0,0,0,0.4);
+        background: rgba(0,0,0,0.7);
         border: none;
         color: white;
-        width: 40px;
-        height: 40px;
+        width: 50px;
+        height: 50px;
         border-radius: 50%;
         display: flex;
         justify-content: center;
         align-items: center;
         cursor: pointer;
         z-index: 10;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
       }
       .stats-box {
         font-family: monospace;
@@ -289,6 +298,13 @@
       createCallBtn.onclick = async () => {
         if (!localStream) return alert("カメラが選択されていません。");
         createCallBtn.disabled = true;
+
+        const rotateCheckbox = document.getElementById('rotateCheckbox');
+        if (rotateCheckbox.checked) {
+          localVideo.classList.add('rotated');
+        } else {
+          localVideo.classList.remove('rotated');
+        }
 
         const callDoc = firestore.collection("calls").doc();
         const offerCandidates = callDoc.collection("offerCandidates");
