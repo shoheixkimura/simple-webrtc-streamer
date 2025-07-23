@@ -36,11 +36,13 @@
         transition: transform 0.2s ease-in-out;
       }
       #remoteVideo.rotated {
-        transform: rotate(90deg);
-        width: 100%;
-        height: 100%;
-        object-fit: cover; /* ここを cover に変更 */
-        transform-origin: center center;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: calc(100% * (1920 / 1080));
+        height: calc(100% * (1080 / 1920));
+        transform: translate(-50%, -50%) rotate(90deg);
+        object-fit: cover;
       }
       
       #localVideo {
